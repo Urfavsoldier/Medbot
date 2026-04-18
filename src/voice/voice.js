@@ -11,22 +11,22 @@ const statusPill = document.getElementById("statusPill");
 const statusText = document.getElementById("statusText");
 const recognizedText = document.getElementById("recognizedText");
 const aiResult = document.getElementById("aiResult");
+const lastAction = document.getElementById("lastAction");
 const shell = document.querySelector(".voice-shell");
 
 init();
 
 function init() {
   console.log("MedBot voice init");
-
   startButton.addEventListener("click", startListening);
   stopButton.addEventListener("click", stopListening);
 
   if (!recognition) {
-    console.error("SpeechRecognition is not supported in this browser.");
-    updateUI("IDLE");
+    console.error("SpeechRecognition is not supported.");
     recognizedText.textContent = "Speech recognition is not supported in this browser.";
     startButton.disabled = true;
     stopButton.disabled = true;
+    updateUI("IDLE");
     return;
   }
 
@@ -45,29 +45,22 @@ function init() {
     const resultIndex = event.resultIndex ?? 0;
     const text = event.results?.[resultIndex]?.[0]?.transcript || event.results?.[0]?.[0]?.transcript || "";
     console.log("Recognized:", text);
-
     recognizedText.textContent = text || "No speech recognized.";
-    updateUI("PROCESSING");
     isListening = false;
-
-    sendToAI(text);
+    updateUI("PROCESSING");
+    sendToBackground(text);
   };
 
   recognition.onerror = (event) => {
     console.error("Recognition error:", event.error);
-    updateUI("IDLE");
     isListening = false;
+    updateUI("IDLE");
   };
 
   recognition.onend = () => {
     console.log("Recognition ended");
-    if (isListening) {
-      isListening = false;
-    }
-
-    if (statusText.textContent === "Listening") {
-      updateUI("IDLE");
-    }
+    isListening = false;
+    if (statusText.textContent === "Listening") updateUI("IDLE");
   };
 
   updateUI("IDLE");
@@ -75,9 +68,7 @@ function init() {
 
 function startListening() {
   console.log("startListening called", { isListening });
-
-  if (!recognition) return;
-  if (isListening) return;
+  if (!recognition || isListening) return;
 
   try {
     speechSynthesis.cancel();
@@ -93,7 +84,6 @@ function startListening() {
 
 function stopListening() {
   console.log("stopListening called", { isListening });
-
   if (!recognition) return;
   if (!isListening) {
     updateUI("IDLE");
@@ -110,35 +100,29 @@ function stopListening() {
   }
 }
 
-async function sendToAI(text) {
-  console.log("sendToAI called", text);
-
+async function sendToBackground(text) {
+  console.log("sendToBackground", text);
   if (!text || !text.trim()) {
     updateUI("IDLE");
     return;
   }
 
   try {
-    const response = await chrome.runtime.sendMessage({
-      type: "PROCESS_COMMAND",
-      payload: text
-    });
-
-    console.log("AI response:", response);
+    const response = await chrome.runtime.sendMessage({ type: "MEDBOT_RUN_COMMAND", command: text });
+    console.log("MedBot command response", response);
     aiResult.textContent = JSON.stringify(response?.result || response, null, 2);
-
-    const spoken = buildVoiceResponse(response?.result);
-    speak(spoken);
+    lastAction.textContent = response?.result?.message || response?.error || "Command processed.";
+    speak(buildVoiceResponse(response?.result));
   } catch (error) {
-    console.error("sendToAI error:", error);
+    console.error("sendToBackground error:", error);
     aiResult.textContent = JSON.stringify({ ok: false, error: error?.message || String(error) }, null, 2);
+    lastAction.textContent = "Command failed.";
     updateUI("IDLE");
   }
 }
 
 function speak(text) {
   console.log("speak called", text);
-
   if (!("speechSynthesis" in window) || !text) {
     updateUI("IDLE");
     return;
@@ -146,71 +130,40 @@ function speak(text) {
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "ru-RU";
-
   utterance.onstart = () => updateUI("SPEAKING");
   utterance.onend = () => updateUI("IDLE");
   utterance.onerror = (event) => {
     console.error("Speech synthesis error:", event.error);
     updateUI("IDLE");
   };
-
   speechSynthesis.cancel();
   speechSynthesis.speak(utterance);
 }
 
 function updateUI(state) {
   console.log("updateUI:", state);
-
-  const labelMap = {
-    IDLE: "Idle",
-    LISTENING: "Listening",
-    PROCESSING: "Processing",
-    SPEAKING: "Speaking"
-  };
-
-  statusText.textContent = labelMap[state] || "Idle";
+  const labels = { IDLE: "Idle", LISTENING: "Listening", PROCESSING: "Processing", SPEAKING: "Speaking" };
+  statusText.textContent = labels[state] || "Idle";
   statusPill.className = "status-pill";
   shell.classList.toggle("is-listening", state === "LISTENING");
-
   if (state === "LISTENING") statusPill.classList.add("listening");
   if (state === "PROCESSING") statusPill.classList.add("processing");
   if (state === "SPEAKING") statusPill.classList.add("speaking");
-
   startButton.disabled = state === "LISTENING" || state === "PROCESSING" || state === "SPEAKING";
   stopButton.disabled = state !== "LISTENING";
-
-  chrome.runtime.sendMessage({
-    type: "MEDBOT_SET_STATUS",
-    status: labelMap[state] || "Idle"
-  }).catch((error) => {
-    console.warn("Status sync failed:", error);
-  });
+  chrome.runtime.sendMessage({ type: "MEDBOT_SET_STATUS", status: labels[state] || "Idle" }).catch((error) => console.warn("Status sync failed", error));
 }
 
-function buildVoiceResponse(command) {
-  if (!command || command.ok === false) {
-    return "Не удалось обработать команду.";
-  }
-
-  if (command.intent === "fill_medical_form") {
-    return "Осмотр заполнен. Сформировать расписание?";
-  }
-
-  if (command.intent === "generate_schedule") {
-    return "Расписание сформировано.";
-  }
-
-  if (command.intent === "open_patient_record") {
-    return "Карта пациента найдена.";
-  }
-
-  if (command.intent === "navigate_to_document") {
-    return "Документ открыт.";
-  }
-
-  if (command.next_step) {
-    return command.next_step;
-  }
-
+function buildVoiceResponse(result) {
+  const command = result?.structuredCommand || result;
+  if (!result?.ok && !command?.intent) return "Не удалось выполнить команду.";
+  if (result?.suggestion?.message) return result.suggestion.message;
+  if (command?.next_suggestion) return command.next_suggestion;
+  if (command?.intent === "fill_medical_form") return "Осмотр заполнен. Сформировать расписание процедур?";
+  if (command?.intent === "generate_schedule") return "Расписание сформировано.";
+  if (command?.intent === "mark_service_completed") return "Услуга отмечена как выполненная.";
+  if (command?.intent === "write_procedure_diary") return "Дневник процедуры заполнен.";
+  if (command?.intent === "open_patient_record") return "Карта пациента открыта.";
+  if (command?.intent === "navigate_to_document") return "Документ открыт.";
   return "Готово.";
 }

@@ -11,7 +11,7 @@
       <header class="voice-header">
         <div>
           <p class="eyebrow">MedBot Voice Mode</p>
-          <h1>Clinical voice control</h1>
+          <h1>External medical RPA</h1>
         </div>
         <div class="status-pill" id="statusPill">
           <span class="status-dot"></span>
@@ -20,12 +20,13 @@
       </header>
 
       <section class="voice-card">
-        <div class="orb" aria-hidden="true">
+        <div class="signal-meter" aria-hidden="true">
+          <span></span>
+          <span></span>
           <span></span>
           <span></span>
           <span></span>
         </div>
-
         <div class="controls">
           <button id="startButton" type="button">Start Listening</button>
           <button id="stopButton" type="button">Stop</button>
@@ -37,16 +38,27 @@
           <div class="panel-title">Recognized speech</div>
           <p id="recognizedText">No speech recognized yet.</p>
         </article>
-
         <article>
           <div class="panel-title">AI JSON result</div>
           <pre id="aiResult">{}</pre>
         </article>
+        <article>
+          <div class="panel-title">Last action</div>
+          <p id="lastAction">Waiting for command.</p>
+        </article>
+        <article>
+          <div class="panel-title">Sample commands</div>
+          <ul>
+            <li>Открой первичный прием Иванова</li>
+            <li>Жалобы на головную боль и слабость</li>
+            <li>Объективно мышечный тонус снижен</li>
+            <li>Назначить массаж и ЛФК</li>
+            <li>Сформируй расписание на 9 рабочих дней</li>
+            <li>Поставь выполнено по массажу</li>
+          </ul>
+        </article>
       </section>
-
-      <p class="hint">Try: Жалобы: головная боль. Объективно: слабость. Назначить ЛФК.</p>
     </main>
-
     <script src="voice.js"></script>
   </body>
 </html>

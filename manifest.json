@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "MedBot",
   "version": "1.0.0",
-  "description": "AI-powered medical RPA assistant for structured form automation.",
+  "description": "External AI medical RPA agent for Damumed-like web interfaces.",
   "action": {
     "default_title": "MedBot",
     "default_popup": "src/popup/popup.html"
@@ -17,6 +17,9 @@
         "<all_urls>"
       ],
       "js": [
+        "src/content/domActions.js",
+        "src/content/proactiveAssistant.js",
+        "src/content/actionRouter.js",
         "src/content/contentScript.js"
       ],
       "run_at": "document_idle"

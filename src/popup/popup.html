@@ -7,33 +7,44 @@
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
-    <main class="app-shell">
-      <header class="topbar">
-        <div class="brand-lockup">
-          <div class="brand-mark" aria-hidden="true">
-            <span class="brand-core"></span>
-          </div>
-          <div>
-            <h1>MedBot</h1>
-            <p>Voice runs in a dedicated tab</p>
-          </div>
+    <main class="popup-shell">
+      <header class="brand-row">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>MedBot</h1>
+          <p>External medical RPA agent</p>
         </div>
       </header>
 
-      <section class="hero-panel">
-        <div>
-          <span class="eyebrow">Current status</span>
-          <p class="status-help" id="statusText">Idle</p>
-        </div>
-        <span class="status-dot" id="statusDot"></span>
+      <section class="status-card">
+        <span class="eyebrow">Status</span>
+        <strong id="statusText">Idle</strong>
+        <p id="lastCommand">No command yet.</p>
       </section>
 
-      <button class="button button-primary" id="openVoiceButton" type="button">
-        <span class="button-shine"></span>
-        Open Voice Mode
-      </button>
+      <section class="controls">
+        <button id="openVoiceButton" class="primary" type="button">Open Voice Mode</button>
+        <button id="pingButton" type="button">Ping Test</button>
+        <button id="domTestButton" type="button">DOM Test</button>
+      </section>
 
-      <p class="hint">Voice recognition stays alive after this popup closes.</p>
+      <section class="test-card">
+        <div class="test-header">
+          <span class="eyebrow">Test AI</span>
+          <button id="testAiButton" type="button">Run</button>
+        </div>
+        <textarea id="testAiText" rows="3">Жалобы: головная боль. Объективно: слабость. Назначить ЛФК.</textarea>
+        <pre id="testResult">Ready.</pre>
+      </section>
+
+      <section class="samples">
+        <span class="eyebrow">Demo commands</span>
+        <ul>
+          <li>Открой первичный прием Иванова</li>
+          <li>Жалобы на головную боль и слабость</li>
+          <li>Сформируй расписание на 9 рабочих дней</li>
+        </ul>
+      </section>
     </main>
 
     <script src="popup.js"></script>

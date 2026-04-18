@@ -1,249 +1,208 @@
-export async function processCommand(text) {
-  const input = normalizeInput(text);
-  console.log("MedBot AI processCommand", input);
+import { SYSTEM_PROMPT } from "./systemPrompt.js";
+import { formatExamplesForPrompt } from "./examples.js";
 
-  try {
-    const config = await getAiConfig();
-    if (config.apiKey) {
-      const raw = await requestLlmJson(input, config);
-      return validateCommand(JSON.parse(raw));
-    }
-  } catch (error) {
-    console.warn("MedBot AI LLM fallback used", error);
-  }
+console.log("MedBot AI module loaded");
 
-  return buildFallbackCommand(input);
-}
-
-const SUPPORTED_INTENTS = Object.freeze([
+const SUPPORTED_INTENTS = new Set([
   "open_patient_record",
   "navigate_to_document",
   "fill_medical_form",
   "generate_schedule",
   "mark_service_completed",
-  "suggest_next_step"
+  "write_procedure_diary",
+  "suggest_next_step",
+  "ask_clarification"
 ]);
 
-const MEDICAL_FIELDS = Object.freeze([
-  "complaints",
-  "anamnesis",
-  "objective_status",
-  "recommendations",
-  "procedure_result"
-]);
+const DOCUMENT_TYPES = new Set(["primary_exam", "discharge_summary", "procedure_diary", "schedule_page"]);
+const MEDICAL_FIELDS = ["complaints", "anamnesis", "objective_status", "recommendations", "procedure_result"];
 
-const SYSTEM_PROMPT = `
-You are MedBot, a medical RPA command parser.
-Return strict JSON only. No markdown. No prose.
-Use one intent: open_patient_record, navigate_to_document, fill_medical_form, generate_schedule, mark_service_completed, suggest_next_step.
-For medical forms, split doctor's speech into granular fields:
-complaints, anamnesis, objective_status, recommendations, procedure_result.
-Never put the whole note into one field.
-Return unknown values by omitting the key.
-`.trim();
-
-async function getAiConfig() {
-  if (!globalThis.chrome?.storage?.local) {
-    return {
-      provider: "openai",
-      apiKey: "",
-      model: "gpt-4o-mini"
-    };
-  }
-
-  const stored = await chrome.storage.local.get([
-    "medbot.ai.provider",
-    "medbot.ai.apiKey",
-    "medbot.ai.model"
-  ]);
-
-  const provider = String(stored["medbot.ai.provider"] || "openai").toLowerCase();
-
-  return {
-    provider,
-    apiKey: stored["medbot.ai.apiKey"] || "",
-    model: stored["medbot.ai.model"] || (provider === "claude" ? "claude-3-5-sonnet-latest" : "gpt-4o-mini")
-  };
-}
-
-async function requestLlmJson(text, config) {
-  if (config.provider === "claude") {
-    return requestClaude(text, config);
-  }
-
-  return requestOpenAI(text, config);
-}
-
-async function requestOpenAI(text, config) {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: config.model,
-      temperature: 0,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: text }
-      ]
-    })
-  });
-
-  const payload = await readApiJson(response, "OpenAI");
-  const content = payload?.choices?.[0]?.message?.content;
-
-  if (!isStrictJsonObjectString(content)) {
-    throw new Error("OpenAI returned invalid JSON content.");
-  }
-
-  return content.trim();
-}
-
-async function requestClaude(text, config) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": config.apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: config.model,
-      max_tokens: 900,
-      temperature: 0,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: text }]
-    })
-  });
-
-  const payload = await readApiJson(response, "Claude");
-  const content = payload?.content?.find((item) => item?.type === "text")?.text;
-
-  if (!isStrictJsonObjectString(content)) {
-    throw new Error("Claude returned invalid JSON content.");
-  }
-
-  return content.trim();
-}
-
-async function readApiJson(response, provider) {
-  const body = await response.text();
-  let payload = null;
+export async function processCommand(text) {
+  const input = normalizeInput(text);
+  console.log("MedBot processCommand", input);
 
   try {
-    payload = body ? JSON.parse(body) : null;
-  } catch {
-    throw new Error(`${provider} returned a non-JSON API response.`);
-  }
+    const config = await getGeminiConfig();
+    if (!config.apiKey) {
+      console.warn("Gemini API key is not configured. Using local fallback parser.");
+      return fallbackCommand(input);
+    }
 
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || payload?.message || `${provider} request failed.`);
+    const rawText = await callGemini(input, config);
+    const parsed = parseJsonStrict(rawText);
+    return normalizeCommand(parsed, input);
+  } catch (error) {
+    console.error("MedBot AI error", error);
+    return fallbackCommand(input);
   }
-
-  return payload;
 }
 
-function buildFallbackCommand(text) {
-  const fields = parseMedicalFields(text);
-
-  if (Object.keys(fields).length > 0) {
-    return {
-      intent: "fill_medical_form",
-      document_type: "primary_exam",
-      fields
-    };
+async function getGeminiConfig() {
+  if (!globalThis.chrome?.storage?.local) {
+    return { apiKey: "", model: "gemini-1.5-flash" };
   }
 
-  const lower = text.toLowerCase();
-
-  if (containsAny(lower, ["schedule", "распис", "график"])) {
-    return {
-      intent: "generate_schedule",
-      target: "schedule",
-      service: extractAfter(text, ["schedule", "расписание", "график"]) || "Treatment"
-    };
-  }
-
-  if (containsAny(lower, ["patient", "пациент", "карта"])) {
-    return {
-      intent: "open_patient_record",
-      target: "patients",
-      patient: { name: text }
-    };
-  }
-
-  if (containsAny(lower, ["document", "осмотр", "документ"])) {
-    return {
-      intent: "navigate_to_document",
-      document_type: "primary_exam",
-      target: "primary_exam"
-    };
-  }
-
+  const stored = await chrome.storage.local.get(["medbot.gemini.apiKey", "medbot.gemini.model"]);
   return {
-    intent: "suggest_next_step",
-    next_step: "Уточните действие для MedBot."
+    apiKey: stored["medbot.gemini.apiKey"] || "",
+    model: stored["medbot.gemini.model"] || "gemini-1.5-flash"
   };
 }
 
-function validateCommand(command) {
+async function callGemini(input, config) {
+  const prompt = [
+    SYSTEM_PROMPT,
+    "High quality examples:",
+    formatExamplesForPrompt(),
+    `Doctor utterance: ${input}`,
+    "Return strict JSON only."
+  ].join("\n\n");
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent?key=${encodeURIComponent(config.apiKey)}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }]
+        }
+      ],
+      generationConfig: {
+        temperature: 0,
+        responseMimeType: "application/json"
+      }
+    })
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Gemini request failed.");
+  }
+
+  return payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim() || "";
+}
+
+function parseJsonStrict(rawText) {
+  const text = String(rawText || "").trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+
+  if (!text.startsWith("{") || !text.endsWith("}")) {
+    throw new Error("AI returned non-JSON text.");
+  }
+
+  return JSON.parse(text);
+}
+
+function normalizeCommand(command, sourceText) {
   if (!command || typeof command !== "object" || Array.isArray(command)) {
-    throw new Error("AI response must be a JSON object.");
+    throw new Error("AI command must be a JSON object.");
   }
 
-  if (!SUPPORTED_INTENTS.includes(command.intent)) {
-    throw new Error(`Unsupported intent: ${command.intent}`);
-  }
+  const intent = SUPPORTED_INTENTS.has(command.intent) ? command.intent : "ask_clarification";
+  const output = { intent };
 
-  const output = { intent: command.intent };
-  copyString(command, output, "document_type");
-  copyString(command, output, "target");
+  if (DOCUMENT_TYPES.has(command.document_type)) output.document_type = command.document_type;
+  copyString(command, output, "patient_name");
   copyString(command, output, "service");
-  copyString(command, output, "next_step");
-  copyString(command, output, "startDate");
+  copyString(command, output, "message");
+  copyString(command, output, "next_suggestion");
   copyNumber(command, output, "days");
 
-  const fields = pickStringMap(command.fields, MEDICAL_FIELDS);
-  if (Object.keys(fields).length > 0) {
-    output.fields = fields;
-  }
+  const fields = normalizeFields(command.fields);
+  const deterministicFields = parseMedicalFields(sourceText);
+  const mergedFields = { ...fields, ...deterministicFields };
+  if (Object.keys(mergedFields).length > 0) output.fields = mergedFields;
 
-  const patient = pickStringMap(command.patient, ["name", "id"]);
-  if (Object.keys(patient).length > 0) {
-    output.patient = patient;
-  }
-
-  if (isPlainObject(command.schedule)) output.schedule = cloneJson(command.schedule);
   if (Array.isArray(command.procedures)) output.procedures = cloneJson(command.procedures);
+  else output.procedures = inferProcedures(sourceText, output.fields);
+
   if (Array.isArray(command.specialists)) output.specialists = cloneJson(command.specialists);
   if (isPlainObject(command.workingHours)) output.workingHours = cloneJson(command.workingHours);
+  if (isPlainObject(command.schedule)) output.schedule = cloneJson(command.schedule);
 
-  if (output.intent === "fill_medical_form") {
-    output.fields = {
-      ...parseMedicalFields(Object.values(output.fields || {}).join(" ")),
-      ...(output.fields || {})
-    };
+  if (intent === "fill_medical_form" && !output.document_type) output.document_type = "primary_exam";
+  if (intent === "generate_schedule" && !output.document_type) output.document_type = "schedule_page";
+  if (intent === "write_procedure_diary" && !output.document_type) output.document_type = "procedure_diary";
 
-    if (!output.fields || Object.keys(output.fields).length === 0) {
-      throw new Error("fill_medical_form requires fields.");
-    }
+  if (intent === "ask_clarification" && !output.message) {
+    output.message = "Не удалось точно распознать команду";
   }
 
   return output;
 }
 
+function fallbackCommand(text) {
+  const fields = parseMedicalFields(text);
+  const procedures = inferProcedures(text, fields);
+  const lower = text.toLowerCase();
+
+  if (/первич|при[её]м|карт|пациент|иванов/.test(lower)) {
+    return {
+      intent: "open_patient_record",
+      document_type: lower.includes("первич") ? "primary_exam" : undefined,
+      patient_name: extractPatientName(text) || "Иванов",
+      next_suggestion: "Заполнить жалобы пациента?"
+    };
+  }
+
+  if (/эпикриз|выпис/.test(lower)) {
+    return { intent: "navigate_to_document", document_type: "discharge_summary" };
+  }
+
+  if (/дневник/.test(lower) && /запиши|напиши|процедур/.test(lower)) {
+    return {
+      intent: "write_procedure_diary",
+      document_type: "procedure_diary",
+      service: extractService(text) || "Процедура",
+      fields: {
+        procedure_result: fields.procedure_result || extractAfterColon(text) || "Процедура выполнена, перенесена спокойно"
+      },
+      next_suggestion: "Отметить услугу выполненной?"
+    };
+  }
+
+  if (/выполнено|заверш/.test(lower)) {
+    return {
+      intent: "mark_service_completed",
+      service: extractService(text) || "Массаж",
+      next_suggestion: "Заполнить дневник процедуры?"
+    };
+  }
+
+  if (/распис|график|9 рабочих/.test(lower)) {
+    return {
+      intent: "generate_schedule",
+      document_type: "schedule_page",
+      days: 9,
+      procedures: procedures.length > 0 ? procedures : defaultProcedures()
+    };
+  }
+
+  if (Object.keys(fields).length > 0 || procedures.length > 0) {
+    return {
+      intent: "fill_medical_form",
+      document_type: "primary_exam",
+      fields,
+      procedures,
+      next_suggestion: procedures.length > 0 ? "Сформировать расписание процедур?" : "Продолжить заполнение осмотра?"
+    };
+  }
+
+  return {
+    intent: "ask_clarification",
+    message: "Не удалось точно распознать команду"
+  };
+}
+
 function parseMedicalFields(text) {
   const source = String(text || "");
   const markers = [
-    { field: "complaints", labels: ["жалобы", "жалуется на", "жалуется", "complaints"] },
-    { field: "anamnesis", labels: ["анамнез", "history", "anamnesis"] },
-    { field: "objective_status", labels: ["объективно", "объективный статус", "objective"] },
-    { field: "recommendations", labels: ["назначить", "назначено", "рекомендации", "лечение", "treatment", "recommendations"] },
-    { field: "procedure_result", labels: ["результат процедуры", "результат", "выполнено", "result"] }
+    { field: "complaints", labels: ["жалобы", "жалоба", "жалуется на", "жалуется"] },
+    { field: "anamnesis", labels: ["анамнез", "анамнестически"] },
+    { field: "objective_status", labels: ["объективно", "объективный статус", "тонус", "координация"] },
+    { field: "recommendations", labels: ["назначить", "рекомендации", "лечение"] },
+    { field: "procedure_result", labels: ["результат процедуры", "ребенок перенес", "перенес процедуру", "процедуру спокойно"] }
   ];
   const found = [];
   const lower = source.toLowerCase();
@@ -251,12 +210,8 @@ function parseMedicalFields(text) {
   for (const marker of markers) {
     for (const label of marker.labels) {
       const index = lower.indexOf(label);
-      if (index >= 0) {
-        found.push({
-          field: marker.field,
-          start: index,
-          end: consumeLabel(source, index + label.length)
-        });
+      if (index !== -1) {
+        found.push({ field: marker.field, start: index, end: consumeLabel(source, index + label.length), label });
         break;
       }
     }
@@ -268,22 +223,84 @@ function parseMedicalFields(text) {
   for (let index = 0; index < found.length; index += 1) {
     const current = found[index];
     const next = found[index + 1];
-    const value = cleanFieldValue(source.slice(current.end, next ? next.start : source.length));
-    if (value) fields[current.field] = value;
+    let value = cleanValue(source.slice(current.end, next ? next.start : source.length));
+
+    if (!value && current.field === "complaints") value = cleanValue(source.slice(current.start, next ? next.start : source.length));
+    if (!value && current.field === "objective_status") value = cleanValue(source.slice(current.start, next ? next.start : source.length));
+    if (!value && current.field === "procedure_result") value = cleanValue(source.slice(current.start, next ? next.start : source.length));
+
+    if (value) fields[current.field] = stripLeadingMarker(value);
   }
 
-  return fields;
+  if (Object.keys(fields).length === 0 && /головн|боль|слабость|сон плох|тошнот|жалоб/u.test(lower) && !/объектив|анамнез|назнач|рекоменд/u.test(lower)) {
+    fields.complaints = source;
+  }
+
+  return normalizeFields(fields);
+}
+
+function inferProcedures(text, fields = {}) {
+  const haystack = `${text} ${fields.recommendations || ""}`.toLowerCase();
+  const procedures = [];
+
+  if (/массаж/.test(haystack)) {
+    procedures.push({ name: "Массаж", specialistType: "Массажист", durationMinutes: 30, sessions: 9 });
+  }
+
+  if (/лфк|лечебн/.test(haystack)) {
+    procedures.push({ name: "ЛФК", specialistType: "Инструктор ЛФК", durationMinutes: 40, sessions: 9 });
+  }
+
+  return procedures;
+}
+
+function defaultProcedures() {
+  return [
+    { name: "Массаж", specialistType: "Массажист", durationMinutes: 30, sessions: 9 },
+    { name: "ЛФК", specialistType: "Инструктор ЛФК", durationMinutes: 40, sessions: 9 }
+  ];
+}
+
+function normalizeFields(fields) {
+  const output = {};
+  if (!isPlainObject(fields)) return output;
+
+  for (const field of MEDICAL_FIELDS) {
+    if (typeof fields[field] === "string" && fields[field].trim()) {
+      output[field] = fields[field].trim();
+    }
+  }
+
+  return output;
+}
+
+function extractPatientName(text) {
+  const match = String(text).match(/(?:пациент[а-я]*|при[её]м)\s+([А-ЯЁA-Z][а-яёa-z-]+)/u);
+  return match?.[1] || "";
+}
+
+function extractService(text) {
+  if (/массаж/i.test(text)) return "Массаж";
+  if (/лфк/i.test(text)) return "ЛФК";
+  return "";
+}
+
+function extractAfterColon(text) {
+  const index = String(text).indexOf(":");
+  return index >= 0 ? cleanValue(String(text).slice(index + 1)) : "";
 }
 
 function consumeLabel(text, index) {
   let cursor = index;
-  while (cursor < text.length && /[\s:;,\-.—]/u.test(text[cursor])) {
-    cursor += 1;
-  }
+  while (cursor < text.length && /[\s:;,\-.—]/u.test(text[cursor])) cursor += 1;
   return cursor;
 }
 
-function cleanFieldValue(value) {
+function stripLeadingMarker(value) {
+  return cleanValue(value.replace(/^(жалобы|жалуется на|жалуется|объективно|назначить|анамнез)\s*[:\-—]?\s*/iu, ""));
+}
+
+function cleanValue(value) {
   return String(value || "")
     .replace(/\s+/g, " ")
     .replace(/^[\s:;,\-.—]+/u, "")
@@ -291,40 +308,14 @@ function cleanFieldValue(value) {
     .trim();
 }
 
-function containsAny(text, values) {
-  return values.some((value) => text.includes(value));
-}
-
-function extractAfter(text, labels) {
-  const lower = text.toLowerCase();
-  for (const label of labels) {
-    const index = lower.indexOf(label);
-    if (index >= 0) return cleanFieldValue(text.slice(index + label.length));
-  }
-  return "";
-}
-
 function normalizeInput(text) {
   const input = String(text || "").trim();
-  if (!input) throw new Error("processCommand(text) requires text.");
+  if (!input) throw new Error("Empty command text.");
   return input;
 }
 
-function isStrictJsonObjectString(value) {
-  return typeof value === "string" && value.trim().startsWith("{") && value.trim().endsWith("}");
-}
-
-function pickStringMap(value, allowedKeys) {
-  const output = {};
-  if (!isPlainObject(value)) return output;
-  for (const key of allowedKeys) copyString(value, output, key);
-  return output;
-}
-
 function copyString(source, target, key) {
-  if (typeof source[key] === "string" && source[key].trim()) {
-    target[key] = source[key].trim();
-  }
+  if (typeof source[key] === "string" && source[key].trim()) target[key] = source[key].trim();
 }
 
 function copyNumber(source, target, key) {
