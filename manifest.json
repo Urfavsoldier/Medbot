@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "MedBot",
+  "version": "1.0.0",
+  "description": "AI-powered medical RPA assistant for structured form automation.",
+  "action": {
+    "default_title": "MedBot",
+    "default_popup": "src/popup/popup.html"
+  },
+  "background": {
+    "service_worker": "src/background/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "src/content/contentScript.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ]
+}
