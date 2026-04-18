@@ -1,5 +1,6 @@
 import { processCommand } from "../ai/processCommand.js";
 import { generateTreatmentSchedule } from "../scheduling/smartScheduler.js";
+import { generateSchedule, sendCommand, sendEvent } from "./n8nClient.js";
 
 console.log("MedBot background loaded");
 
@@ -38,7 +39,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-async function handleMessage(message) {
+async function handleMessage(message, sender = null) {
   if (!message || typeof message.type !== "string") {
     throw new Error("Invalid message.");
   }
@@ -55,7 +56,7 @@ async function handleMessage(message) {
       return getState();
 
     case "PROCESS_COMMAND":
-      return processCommand(message.payload || "");
+      return processCommandPreview(message.payload || "", sender);
 
     case "MEDBOT_RUN_COMMAND":
       return runCommandOnActiveTab(message.command || "");
@@ -98,11 +99,20 @@ async function runCommandOnActiveTab(text) {
   if (!commandText) throw new Error("Command is empty.");
 
   await setStatus(STATUS.PROCESSING, commandText);
+  let context = {
+    source: "voice_or_text",
+    commandText,
+    locale: "ru-RU"
+  };
 
   try {
-    const aiCommand = await processCommand(commandText);
-    const structuredCommand = enrichCommand(aiCommand);
     const tab = await getAutomationTargetTab();
+    context = {
+      ...await buildContext(commandText, "voice_or_text"),
+      tab: tabToContext(tab)
+    };
+    const aiCommand = await processTextCommand(commandText, null, context);
+    const structuredCommand = await enrichCommand(aiCommand, context);
     const contentResult = await sendToContent(tab.id, {
       type: "MEDBOT_EXECUTE_COMMAND",
       command: commandText,
@@ -114,6 +124,21 @@ async function runCommandOnActiveTab(text) {
       structuredCommand
     };
 
+    const eventResponse = await safeSendEvent(contentResult?.ok === false ? "dom_action_failed" : (contentResult?.event_type || "dom_action_completed"), {
+      ...context,
+      tab: tabToContext(tab),
+      commandText,
+      structuredCommand,
+      contentResult
+    });
+
+    const eventSuggestion = extractEventSuggestion(eventResponse);
+    if (eventSuggestion) {
+      result.suggestion = { message: eventSuggestion, source: "n8n" };
+      result.next_suggestion = eventSuggestion;
+    }
+    result.event_response = eventResponse;
+
     await chrome.storage.local.set({
       [LAST_COMMAND_KEY]: commandText,
       [LAST_RESULT_KEY]: summarizeResult(result)
@@ -123,6 +148,11 @@ async function runCommandOnActiveTab(text) {
     return result;
   } catch (error) {
     await setStatus(STATUS.ERROR, commandText);
+    await safeSendEvent("command_failed", {
+      ...context,
+      commandText,
+      error: error?.message || String(error)
+    });
     throw error;
   }
 }
@@ -132,12 +162,80 @@ async function runDomTest() {
   return sendToContent(tab.id, { type: "MEDBOT_DOM_TEST" });
 }
 
-function enrichCommand(command) {
+async function processTextCommand(text, sender = null, existingContext = null) {
+  const commandText = String(text || "").trim();
+  if (!commandText) throw new Error("Command is empty.");
+
+  const context = existingContext || await buildContext(commandText, "text", sender);
+
+  try {
+    const webhookResponse = await sendCommand(commandText, context);
+    return normalizeWebhookCommand(webhookResponse);
+  } catch (error) {
+    console.error("MedBot n8n command failed, using local AI fallback", error);
+    await safeSendEvent("command_webhook_failed", {
+      ...context,
+      commandText,
+      error: error?.message || String(error)
+    });
+    return processCommand(commandText);
+  }
+}
+
+async function processCommandPreview(text, sender = null) {
+  const commandText = String(text || "").trim();
+  if (!commandText) throw new Error("Command is empty.");
+
+  const context = await buildContext(commandText, "text", sender);
+  const command = await processTextCommand(commandText, sender, context);
+  return enrichCommand(command, context);
+}
+
+async function enrichCommand(command, context = {}) {
+  if (!command || typeof command !== "object") {
+    throw new Error("Structured command is empty or invalid.");
+  }
+
   if (command.intent !== "generate_schedule") {
     return command;
   }
 
   try {
+    const schedulePayload = {
+      context,
+      command,
+      procedures: command.procedures || command.schedule?.procedures || command.service || command.fields?.recommendations,
+      specialists: command.specialists || command.schedule?.specialists,
+      workingHours: command.workingHours || command.schedule?.workingHours,
+      startDate: command.startDate || command.schedule?.startDate || command.schedule?.date,
+      days: command.days || command.schedule?.days || 9
+    };
+    const scheduleResponse = await generateSchedule(schedulePayload);
+    const scheduleResult = normalizeScheduleResponse(scheduleResponse);
+
+    if (!isUsableSchedule(scheduleResult)) {
+      throw new Error("n8n schedule webhook returned no schedule days.");
+    }
+
+    await safeSendEvent("schedule_generated", {
+      ...context,
+      command,
+      scheduleResult
+    });
+
+    return {
+      ...command,
+      schedule_result: scheduleResult,
+      n8n_schedule_response: scheduleResponse
+    };
+  } catch (error) {
+    console.error("MedBot n8n schedule failed, using local scheduler fallback", error);
+    await safeSendEvent("schedule_webhook_failed", {
+      ...context,
+      command,
+      error: error?.message || String(error)
+    });
+
     return {
       ...command,
       schedule_result: generateTreatmentSchedule({
@@ -148,9 +246,103 @@ function enrichCommand(command) {
         days: command.days || command.schedule?.days || 9
       })
     };
+  }
+}
+
+function normalizeWebhookCommand(payload) {
+  const candidate = unwrapWebhookPayload(payload);
+  if (candidate?.intent) return candidate;
+  throw new Error("n8n command webhook returned no valid intent.");
+}
+
+function normalizeScheduleResponse(payload) {
+  const candidate = unwrapWebhookPayload(payload);
+  if (candidate?.schedule_result) return candidate.schedule_result;
+  if (candidate?.schedule) return candidate.schedule;
+  if (Array.isArray(candidate?.days)) return candidate;
+  return candidate;
+}
+
+function isUsableSchedule(schedule) {
+  return Array.isArray(schedule?.days) && schedule.days.length > 0;
+}
+
+function unwrapWebhookPayload(payload) {
+  let current = unwrapArray(payload);
+
+  if (typeof current === "string") {
+    current = parseJsonString(current);
+  }
+
+  const keys = ["command", "result", "data", "body", "json", "output", "response"];
+  for (const key of keys) {
+    if (current?.[key] == null) continue;
+    const next = unwrapArray(typeof current[key] === "string" ? parseJsonString(current[key]) : current[key]);
+    if (next?.intent || next?.schedule_result || next?.schedule || Array.isArray(next?.days)) return next;
+    current = next;
+  }
+
+  return current || {};
+}
+
+function unwrapArray(value) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function parseJsonString(value) {
+  const text = String(value || "")
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: value };
+  }
+}
+
+async function buildContext(commandText, source, sender = null) {
+  const state = await getState();
+  const tab = await getContextTab(sender);
+  return {
+    source,
+    commandText,
+    locale: "ru-RU",
+    status: state.status,
+    lastCommand: state.lastCommand,
+    tab
+  };
+}
+
+async function getContextTab(sender) {
+  if (sender?.tab) return tabToContext(sender.tab);
+
+  try {
+    const tab = await getActiveTab();
+    return tabToContext(tab);
+  } catch {
+    return null;
+  }
+}
+
+function tabToContext(tab) {
+  if (!tab) return null;
+  return {
+    id: tab.id,
+    url: tab.url || "",
+    title: tab.title || ""
+  };
+}
+
+async function safeSendEvent(eventType, context) {
+  try {
+    return await sendEvent(eventType, context);
   } catch (error) {
-    console.warn("MedBot schedule generation failed", error);
-    return { ...command, schedule_error: error?.message || String(error) };
+    console.error("MedBot n8n event failed", eventType, error);
+    return { ok: false, error: error?.message || String(error) };
   }
 }
 
@@ -223,6 +415,15 @@ function summarizeResult(result) {
     ok: Boolean(result?.ok),
     message: result?.message || "",
     intent: result?.structuredCommand?.intent || "",
+    suggestion: result?.suggestion?.message || result?.next_suggestion || "",
     time: new Date().toISOString()
   };
+}
+
+function extractEventSuggestion(response) {
+  const candidate = unwrapWebhookPayload(response);
+  const value = candidate?.next_suggestion || candidate?.suggestion || candidate?.message || candidate?.response;
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value?.message === "string" && value.message.trim()) return value.message.trim();
+  return "";
 }

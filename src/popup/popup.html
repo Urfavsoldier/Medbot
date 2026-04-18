@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,42 +8,67 @@
   </head>
   <body>
     <main class="popup-shell">
-      <header class="brand-row">
-        <div class="logo" aria-hidden="true"></div>
-        <div>
-          <h1>MedBot</h1>
-          <p>External medical RPA agent</p>
+      <header class="app-header">
+        <div class="brand-row">
+          <div class="logo" aria-hidden="true"><span></span></div>
+          <div class="brand-copy">
+            <h1>MedBot</h1>
+            <p>Автономный медицинский ассистент</p>
+          </div>
+        </div>
+        <div class="status-pill" id="statusPill" aria-live="polite">
+          <span class="status-dot"></span>
+          <span id="statusText">Ожидание</span>
         </div>
       </header>
 
-      <section class="status-card">
-        <span class="eyebrow">Status</span>
-        <strong id="statusText">Idle</strong>
-        <p id="lastCommand">No command yet.</p>
-      </section>
-
-      <section class="controls">
-        <button id="openVoiceButton" class="primary" type="button">Open Voice Mode</button>
-        <button id="pingButton" type="button">Ping Test</button>
-        <button id="domTestButton" type="button">DOM Test</button>
-      </section>
-
-      <section class="test-card">
-        <div class="test-header">
-          <span class="eyebrow">Test AI</span>
-          <button id="testAiButton" type="button">Run</button>
+      <section class="voice-card">
+        <div class="mic-visual" aria-hidden="true">
+          <span></span>
         </div>
-        <textarea id="testAiText" rows="3">Жалобы: головная боль. Объективно: слабость. Назначить ЛФК.</textarea>
-        <pre id="testResult">Ready.</pre>
+        <div class="voice-copy">
+          <span class="eyebrow">Голосовое управление</span>
+          <strong id="voiceHint">Готов к команде врача</strong>
+        </div>
+        <div class="voice-actions">
+          <button id="startListeningButton" class="primary-button" type="button">Начать запись</button>
+          <button id="stopListeningButton" class="secondary-button" type="button">Остановить</button>
+        </div>
       </section>
 
-      <section class="samples">
-        <span class="eyebrow">Demo commands</span>
-        <ul>
-          <li>Открой первичный прием Иванова</li>
-          <li>Жалобы на головную боль и слабость</li>
-          <li>Сформируй расписание на 9 рабочих дней</li>
-        </ul>
+      <section class="panel">
+        <div class="section-title">
+          <span class="eyebrow">Распознанная речь</span>
+          <button id="runTextButton" class="mini-button" type="button">Выполнить</button>
+        </div>
+        <textarea
+          id="transcriptText"
+          rows="4"
+          placeholder="Скажите команду или введите текст вручную..."
+          aria-label="Распознанная речь"
+        ></textarea>
+      </section>
+
+      <section class="panel compact-panel">
+        <span class="eyebrow">Действие системы</span>
+        <p id="aiActionText">Ожидание команды.</p>
+      </section>
+
+      <section class="panel compact-panel">
+        <span class="eyebrow">Ответ ассистента</span>
+        <p id="assistantResponseText">Готов помочь с осмотром, расписанием и дневником процедур.</p>
+      </section>
+
+      <section class="panel compact-panel">
+        <span class="eyebrow">Рекомендация</span>
+        <p id="suggestionText">После заполнения осмотра я предложу следующий шаг.</p>
+      </section>
+
+      <section class="quick-actions" aria-label="Быстрые действия">
+        <button type="button" data-command="Открой первичный прием Иванова">Открыть пациента</button>
+        <button type="button" data-command="Жалобы на головную боль и слабость. Объективно тонус снижен. Назначить массаж и ЛФК.">Заполнить форму</button>
+        <button type="button" data-command="Сформируй расписание на 9 рабочих дней">Расписание</button>
+        <button type="button" data-command="Поставь выполнено по массажу">Выполнено</button>
       </section>
     </main>
 

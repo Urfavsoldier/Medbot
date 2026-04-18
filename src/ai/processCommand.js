@@ -126,7 +126,7 @@ function normalizeCommand(command, sourceText) {
   if (intent === "write_procedure_diary" && !output.document_type) output.document_type = "procedure_diary";
 
   if (intent === "ask_clarification" && !output.message) {
-    output.message = "Не удалось точно распознать команду";
+    output.message = "Не удалось распознать команду. Повторите, пожалуйста.";
   }
 
   return output;
@@ -150,15 +150,15 @@ function fallbackCommand(text) {
     return { intent: "navigate_to_document", document_type: "discharge_summary" };
   }
 
-  if (/дневник/.test(lower) && /запиши|напиши|процедур/.test(lower)) {
+  if ((/дневник/.test(lower) && /запиши|напиши|процедур/.test(lower)) || /ребенок перенес|перенес процедуру|процедуру спокойно/.test(lower)) {
     return {
       intent: "write_procedure_diary",
       document_type: "procedure_diary",
       service: extractService(text) || "Процедура",
       fields: {
-        procedure_result: fields.procedure_result || extractAfterColon(text) || "Процедура выполнена, перенесена спокойно"
+        procedure_result: extractAfterColon(text) || (isProcedureResultOnly(fields) ? text : fields.procedure_result) || "Процедура выполнена, перенесена спокойно"
       },
-      next_suggestion: "Отметить услугу выполненной?"
+      next_suggestion: "Услуга отмечена как выполненная."
     };
   }
 
@@ -166,7 +166,7 @@ function fallbackCommand(text) {
     return {
       intent: "mark_service_completed",
       service: extractService(text) || "Массаж",
-      next_suggestion: "Заполнить дневник процедуры?"
+      next_suggestion: "Дневник процедуры не заполнен. Записать результат?"
     };
   }
 
@@ -191,7 +191,7 @@ function fallbackCommand(text) {
 
   return {
     intent: "ask_clarification",
-    message: "Не удалось точно распознать команду"
+    message: "Не удалось распознать команду. Повторите, пожалуйста."
   };
 }
 
@@ -297,7 +297,13 @@ function consumeLabel(text, index) {
 }
 
 function stripLeadingMarker(value) {
-  return cleanValue(value.replace(/^(жалобы|жалуется на|жалуется|объективно|назначить|анамнез)\s*[:\-—]?\s*/iu, ""));
+  return cleanValue(value
+    .replace(/^(жалобы на|жалобы|жалуется на|жалуется|объективно|назначить|анамнез)\s*[:\-—]?\s*/iu, "")
+    .replace(/^на\s+/iu, ""));
+}
+
+function isProcedureResultOnly(fields) {
+  return Boolean(fields?.procedure_result && Object.keys(fields).length === 1);
 }
 
 function cleanValue(value) {

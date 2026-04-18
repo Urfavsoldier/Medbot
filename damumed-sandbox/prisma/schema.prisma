@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  passwordHash   String
+  name           String
+  role           String           @default("doctor")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  medicalRecords MedicalRecord[]
+  diaries        ProcedureDiary[]
+}
+
+model Diagnosis {
+  id       String    @id @default(cuid())
+  title    String
+  code     String?
+  patients Patient[]
+}
+
+model Patient {
+  id               String            @id @default(cuid())
+  fullName         String
+  shortName        String
+  age              Int
+  status           String            @default("На лечении")
+  diagnosisId      String
+  diagnosis        Diagnosis         @relation(fields: [diagnosisId], references: [id])
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  medicalRecord    MedicalRecord?
+  primaryExam      PrimaryExam?
+  dischargeSummary DischargeSummary?
+  diaries          ProcedureDiary[]
+  procedures       Procedure[]
+  scheduleEntries  ScheduleEntry[]
+}
+
+model MedicalRecord {
+  id        String   @id @default(cuid())
+  patientId String   @unique
+  doctorId  String
+  status    String   @default("Открыта")
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor    User     @relation(fields: [doctorId], references: [id])
+}
+
+model PrimaryExam {
+  id              String   @id @default(cuid())
+  patientId       String   @unique
+  complaints      String   @default("")
+  anamnesis       String   @default("")
+  objectiveStatus String   @default("")
+  recommendations String   @default("")
+  savedAt         DateTime @default(now())
+  patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model DischargeSummary {
+  id              String   @id @default(cuid())
+  patientId       String   @unique
+  complaints      String   @default("")
+  objectiveStatus String   @default("")
+  recommendations String   @default("")
+  savedAt         DateTime @default(now())
+  patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model ProcedureDiary {
+  id          String     @id @default(cuid())
+  patientId   String
+  procedureId String?
+  doctorId    String
+  result      String     @default("")
+  status      String     @default("Черновик")
+  savedAt     DateTime   @default(now())
+  patient     Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  procedure   Procedure? @relation(fields: [procedureId], references: [id])
+  doctor      User       @relation(fields: [doctorId], references: [id])
+}
+
+model Procedure {
+  id              String           @id @default(cuid())
+  patientId       String
+  name            String
+  specialist      String
+  status          String           @default("Запланировано")
+  completedAt     DateTime?
+  patient         Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  diaries         ProcedureDiary[]
+  scheduleEntries ScheduleEntry[]
+}
+
+model ScheduleEntry {
+  id         String     @id @default(cuid())
+  patientId  String
+  procedureId String?
+  date       DateTime
+  time       String
+  specialist String
+  procedure  String
+  status     String     @default("Запланировано")
+  duration   Int        @default(40)
+  patient    Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  procedureRef Procedure? @relation(fields: [procedureId], references: [id])
+}

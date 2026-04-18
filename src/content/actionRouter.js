@@ -5,106 +5,82 @@
 
   async function route(command) {
     console.log("MedBot route intent", command?.intent, command);
+
     const dom = window.MedBotDomActions;
-    if (!dom) return fail("DOM actions module is not loaded");
+    if (!dom) {
+      return failure("dom_unavailable", "DOM-модуль MedBot не загружен.");
+    }
+
+    if (!command || typeof command !== "object") {
+      return failure("invalid_command", "Команда пустая или некорректная.");
+    }
 
     try {
       let result;
 
       switch (command.intent) {
         case "open_patient_record":
-          result = await dom.openPatientRecord(command.patient_name || command.patient?.name || "");
-          if (result.ok && command.document_type) await dom.navigateToTab(documentLabel(command.document_type));
+          result = await dom.openPatient(command.patient_name || command.patient?.name || command.patient || "Иванов");
+          if (result.ok && command.document_type) await dom.switchTab(command.document_type);
           break;
 
         case "navigate_to_document":
-          result = await dom.navigateToTab(documentLabel(command.document_type || command.target));
+          result = await dom.switchTab(command.document_type || command.target || "primary_exam");
           break;
 
         case "fill_medical_form":
-          result = await fillMedicalFields(command.fields || {});
+          if (command.document_type) await dom.switchTab(command.document_type);
+          result = await dom.fillMedicalFields(command.fields || {});
           break;
 
         case "generate_schedule":
-          result = await renderSchedule(command);
+          result = await dom.applySchedule(command.schedule_result?.days || command.schedule_result || command.schedule?.days || command.days || []);
           break;
 
         case "mark_service_completed":
-          result = await dom.setCompletedStatus(command.service || command.target || "Выполнено");
+          result = await dom.markCompleted(command.service || command.service_name || command.target || "Массаж");
           break;
 
         case "write_procedure_diary":
-          result = await dom.writeProcedureDiary(command.fields?.procedure_result || command.text || "Процедура выполнена");
+          result = await dom.writeProcedureDiary(command.fields?.procedure_result || command.procedure_result || command.text || "Процедура выполнена, перенесена спокойно.");
           break;
 
         case "suggest_next_step":
-          result = ok(command.next_suggestion || "Следующий шаг готов");
+          result = success("suggest_next_step", command.next_suggestion || "Сформировать расписание процедур?", {});
           break;
 
         case "ask_clarification":
-          result = fail(command.message || "Нужно уточнение команды");
+          result = failure("ask_clarification", command.message || "Не удалось распознать команду. Повторите, пожалуйста.");
           break;
 
         default:
-          result = fail(`Unsupported intent: ${command.intent}`);
+          result = failure("unsupported_intent", `Неподдерживаемое действие: ${command.intent || "unknown"}`);
       }
 
-      const suggestion = window.MedBotProactiveAssistant?.afterAction(command, result);
-      return { ...result, suggestion, actionLog: dom.getActionLog() };
+      const suggestion = window.MedBotProactiveAssistant?.afterAction?.(command, result) || null;
+      return {
+        ...result,
+        intent: command.intent,
+        suggestion,
+        actionLog: dom.getActionLog?.() || []
+      };
     } catch (error) {
       console.error("MedBot router error", error);
-      return { ...fail(error?.message || String(error)), actionLog: dom.getActionLog() };
+      return {
+        ...failure("router_error", error?.message || String(error)),
+        intent: command.intent,
+        actionLog: dom.getActionLog?.() || []
+      };
     }
   }
 
-  async function fillMedicalFields(fields) {
-    const dom = window.MedBotDomActions;
-    const entries = Object.entries(fields);
-    if (entries.length === 0) return fail("Нет полей для заполнения");
-
-    const failed = [];
-    for (const [field, value] of entries) {
-      const result = await dom.fillField(field, value);
-      if (!result.ok) failed.push(field);
-    }
-
-    return failed.length > 0 ? fail(`Не заполнено: ${failed.join(", ")}`) : ok(`Заполнено полей: ${entries.length}`);
+  function success(eventType, message, context = {}) {
+    return { ok: true, event_type: eventType, message, context };
   }
 
-  async function renderSchedule(command) {
-    const dom = window.MedBotDomActions;
-    const schedule = command.schedule_result;
-    await dom.navigateToTab("расписание");
-
-    if (!schedule) {
-      return command.schedule_error ? fail(command.schedule_error) : ok("Расписание не передано");
-    }
-
-    const text = formatSchedule(schedule);
-    const filled = await dom.fillField("schedule", text);
-    return filled.ok ? ok("Расписание сформировано", { schedule }) : ok("Расписание сформировано", { schedule, warning: "Поле расписания не найдено" });
+  function failure(eventType, message, context = {}) {
+    return { ok: false, event_type: eventType, message, context };
   }
-
-  function formatSchedule(schedule) {
-    return (schedule.days || []).map((day) => {
-      const slots = day.slots || day.items || [];
-      const line = slots.map((slot) => `${slot.time || slot.start} ${slot.procedure} (${slot.specialist?.name || slot.specialist})`).join("; ");
-      return `${day.date}: ${line}`;
-    }).join("\n");
-  }
-
-  function documentLabel(documentType) {
-    const labels = {
-      primary_exam: "первичный прием",
-      discharge_summary: "выписной эпикриз",
-      procedure_diary: "дневник процедур",
-      schedule_page: "расписание"
-    };
-    return labels[documentType] || documentType || "документ";
-  }
-
-  function ok(message, extra = {}) { return { ok: true, message, ...extra }; }
-  function fail(message) { return { ok: false, message }; }
 
   window.MedBotActionRouter = { route };
 })();

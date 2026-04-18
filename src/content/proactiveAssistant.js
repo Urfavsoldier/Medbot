@@ -24,15 +24,15 @@
 
     if (command.intent === "generate_schedule") {
       state.scheduleGenerated = true;
-      return suggest("Расписание сформировано. После процедуры отметьте услугу выполненной.");
+      return suggest("Расписание успешно создано.");
     }
 
     if (command.intent === "mark_service_completed") {
-      return suggest("Процедура завершена. Дневник процедуры ещё не заполнен?");
+      return suggest("Дневник процедуры не заполнен. Записать результат?");
     }
 
     if (command.intent === "write_procedure_diary") {
-      return suggest("Дневник заполнен. Поставить статус Выполнено?");
+      return suggest("Данные сохранены.");
     }
 
     if (command.next_suggestion) return suggest(command.next_suggestion);
@@ -40,10 +40,10 @@
   }
 
   function suggestAfterExam(command) {
-    if (!state.completedFields.has("anamnesis")) return suggest("Вы забыли заполнить анамнез");
-    if (!state.completedFields.has("complaints")) return suggest("Вы забыли заполнить жалобы");
-    if (!state.completedFields.has("objective_status")) return suggest("Вы забыли заполнить объективный статус");
-    if (!state.scheduleGenerated && (command.procedures || []).length > 0) return suggest("Осмотр заполнен. Сформировать расписание процедур?");
+    if (!state.completedFields.has("anamnesis")) return suggest("Вы не заполнили раздел «Анамнез».");
+    if (!state.completedFields.has("complaints")) return suggest("Вы не заполнили раздел «Жалобы».");
+    if (!state.completedFields.has("objective_status")) return suggest("Вы не заполнили раздел «Объективный статус».");
+    if (!state.scheduleGenerated && (command.procedures || []).length > 0) return suggest("Сформировать расписание процедур?");
     return command.next_suggestion ? suggest(command.next_suggestion) : null;
   }
 

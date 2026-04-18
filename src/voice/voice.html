@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,54 +9,63 @@
   <body>
     <main class="voice-shell">
       <header class="voice-header">
-        <div>
-          <p class="eyebrow">MedBot Voice Mode</p>
-          <h1>External medical RPA</h1>
+        <div class="brand-lockup">
+          <div class="logo-mark" aria-hidden="true"><span></span></div>
+          <div>
+            <h1>MedBot</h1>
+            <p>Автономный медицинский ассистент</p>
+          </div>
         </div>
-        <div class="status-pill" id="statusPill">
+
+        <div class="status-pill" id="statusPill" aria-live="polite">
           <span class="status-dot"></span>
-          <span id="statusText">Idle</span>
+          <span id="statusText">Ожидание</span>
         </div>
       </header>
 
-      <section class="voice-card">
-        <div class="signal-meter" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
-          <span></span>
-          <span></span>
+      <section class="control-card" aria-label="Голосовое управление">
+        <div class="microphone-tile" aria-hidden="true">
+          <span class="mic-icon"></span>
+        </div>
+        <div class="control-copy">
+          <span class="eyebrow">Голосовая команда</span>
+          <h2>Скажите действие для системы</h2>
+          <p id="stateHint">Готов к голосовой команде.</p>
         </div>
         <div class="controls">
-          <button id="startButton" type="button">Start Listening</button>
-          <button id="stopButton" type="button">Stop</button>
+          <button id="startButton" class="primary-action" type="button">Начать запись</button>
+          <button id="stopButton" class="secondary-action" type="button">Остановить</button>
         </div>
       </section>
 
-      <section class="output-grid">
-        <article>
-          <div class="panel-title">Recognized speech</div>
-          <p id="recognizedText">No speech recognized yet.</p>
+      <section class="feedback-grid" aria-label="Обратная связь">
+        <article class="feedback-card">
+          <div class="panel-title">Распознанная речь</div>
+          <p id="recognizedText">Команда пока не распознана.</p>
         </article>
-        <article>
-          <div class="panel-title">AI JSON result</div>
-          <pre id="aiResult">{}</pre>
+
+        <article class="feedback-card">
+          <div class="panel-title">Действие системы</div>
+          <p id="aiResult">Ожидание команды.</p>
         </article>
-        <article>
-          <div class="panel-title">Last action</div>
-          <p id="lastAction">Waiting for command.</p>
-        </article>
-        <article>
-          <div class="panel-title">Sample commands</div>
-          <ul>
-            <li>Открой первичный прием Иванова</li>
-            <li>Жалобы на головную боль и слабость</li>
-            <li>Объективно мышечный тонус снижен</li>
-            <li>Назначить массаж и ЛФК</li>
-            <li>Сформируй расписание на 9 рабочих дней</li>
-            <li>Поставь выполнено по массажу</li>
-          </ul>
-        </article>
+      </section>
+
+      <section class="activity-card" aria-label="Журнал действий">
+        <div class="panel-title">Журнал</div>
+        <div class="activity-grid">
+          <div>
+            <span>Последняя команда</span>
+            <p id="lastCommand">Команд пока нет.</p>
+          </div>
+          <div>
+            <span>Последнее действие</span>
+            <p id="lastAction">Ожидание команды.</p>
+          </div>
+          <div>
+            <span>Результат</span>
+            <p id="resultStatus">Ожидание</p>
+          </div>
+        </div>
       </section>
     </main>
     <script src="voice.js"></script>

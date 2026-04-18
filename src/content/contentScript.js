@@ -13,7 +13,9 @@
         console.error("MedBot content error", error);
         sendResponse({
           ok: false,
+          event_type: "content_error",
           message: error?.message || String(error),
+          context: {},
           actionLog: window.MedBotDomActions?.getActionLog?.() || []
         });
       });
@@ -23,17 +25,30 @@
 
   async function handleMessage(message) {
     if (message?.type === "MEDBOT_DOM_TEST") {
+      if (!window.MedBotDomActions?.domTestHighlight) {
+        return failure("dom_unavailable", "DOM-модуль MedBot не загружен.");
+      }
       return window.MedBotDomActions.domTestHighlight();
     }
 
     if (message?.type !== "MEDBOT_EXECUTE_COMMAND") {
-      return { ok: false, message: "Unsupported content message" };
+      return failure("unsupported_content_message", "Неподдерживаемое сообщение интерфейса.");
     }
 
     if (!window.MedBotActionRouter?.route) {
-      return { ok: false, message: "Action router is not loaded" };
+      return failure("router_unavailable", "Маршрутизатор действий не загружен.");
     }
 
     return window.MedBotActionRouter.route(message.structuredCommand);
+  }
+
+  function failure(eventType, message) {
+    return {
+      ok: false,
+      event_type: eventType,
+      message,
+      context: {},
+      actionLog: window.MedBotDomActions?.getActionLog?.() || []
+    };
   }
 })();

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Damumed Sandbox</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Основная навигация">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">D</div>
+          <div>
+            <strong>Damumed Sandbox</strong>
+            <span>Реабилитационный центр</span>
+          </div>
+        </div>
+
+        <nav>
+          <button class="nav-item active" type="button" data-testid="nav-patients" data-view="patients">Пациенты</button>
+          <button class="nav-item" type="button" data-testid="nav-registry" data-view="patients">Регистратура</button>
+          <button class="nav-item" type="button" data-testid="nav-schedule" data-tab-target="schedule_page">Расписание</button>
+        </nav>
+
+        <div class="assistant-note">
+          <span>MedBot demo</span>
+          <p>Интерфейс подготовлен для внешней DOM-автоматизации.</p>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Медицинская информационная система</p>
+            <h1 id="pageTitle">Список пациентов</h1>
+          </div>
+          <div class="user-card">
+            <span>Врач ЛФК</span>
+            <strong>Демо-доктор</strong>
+          </div>
+        </header>
+
+        <section id="patientsView" class="panel page active" data-testid="patient-list-page">
+          <div class="section-header">
+            <div>
+              <h2>Пациенты</h2>
+              <p>Поиск пациента и открытие медицинской карты.</p>
+            </div>
+            <span class="count-badge" data-testid="patient-count">5 пациентов</span>
+          </div>
+
+          <form class="search-row" data-testid="patient-search-form">
+            <label for="patientSearch">Поиск пациента</label>
+            <div class="search-controls">
+              <input id="patientSearch" name="patient" data-testid="patient-search-input" type="search" placeholder="Введите пациента" aria-label="Пациент">
+              <button id="patientSearchButton" data-testid="patient-search-button" type="submit">Поиск</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table data-testid="patients-table">
+              <thead>
+                <tr>
+                  <th>ФИО</th>
+                  <th>Возраст</th>
+                  <th>Диагноз</th>
+                  <th>Отделение</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="patientsTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="patientCardView" class="page" data-testid="patient-card-page" hidden>
+          <div class="patient-card-header panel">
+            <div>
+              <p class="eyebrow">Карта пациента</p>
+              <h2 id="patientNameTitle">Пациент не выбран</h2>
+              <p id="patientMeta">Откройте пациента из списка.</p>
+            </div>
+            <button id="backToPatientsButton" class="secondary" type="button" data-testid="back-to-patients">К списку пациентов</button>
+          </div>
+
+          <div class="tabs panel" role="tablist" aria-label="Документы пациента" data-testid="patient-tabs">
+            <button role="tab" aria-selected="true" data-tab="primary_exam" data-testid="tab-primary-exam" type="button">Первичный прием</button>
+            <button role="tab" aria-selected="false" data-tab="discharge_summary" data-testid="tab-discharge-summary" type="button">Выписной эпикриз</button>
+            <button role="tab" aria-selected="false" data-tab="procedure_diary" data-testid="tab-procedure-diary" type="button">Дневник процедур</button>
+            <button role="tab" aria-selected="false" data-tab="schedule_page" data-testid="tab-schedule" type="button">Расписание</button>
+          </div>
+
+          <div class="content-grid">
+            <section class="document-panel panel active" data-document="primary_exam" data-testid="primary-exam-tab">
+              <div class="section-header">
+                <div>
+                  <h2>Первичный прием</h2>
+                  <p>Гранулярное заполнение осмотра пациента.</p>
+                </div>
+                <span class="status-chip">Черновик</span>
+              </div>
+              <div class="form-grid">
+                <label class="field"><span>Жалобы</span><textarea id="primaryComplaints" name="complaints" data-testid="primary-complaints" placeholder="Жалобы пациента" aria-label="Жалобы"></textarea></label>
+                <label class="field"><span>Анамнез</span><textarea id="primaryAnamnesis" name="anamnesis" data-testid="primary-anamnesis" placeholder="Анамнез" aria-label="Анамнез"></textarea></label>
+                <label class="field"><span>Объективный статус</span><textarea id="primaryObjectiveStatus" name="objective_status" data-testid="primary-objective-status" placeholder="Объективный статус" aria-label="Объективный статус"></textarea></label>
+                <label class="field"><span>Рекомендации</span><textarea id="primaryRecommendations" name="recommendations" data-testid="primary-recommendations" placeholder="Рекомендации и назначения" aria-label="Рекомендации"></textarea></label>
+              </div>
+              <button class="primary save-button" type="button" data-testid="save-primary-exam">Сохранить первичный прием</button>
+            </section>
+
+            <section class="document-panel panel" data-document="discharge_summary" data-testid="discharge-summary-tab" hidden>
+              <div class="section-header">
+                <div>
+                  <h2>Выписной эпикриз</h2>
+                  <p>Итоговые данные для закрытия курса реабилитации.</p>
+                </div>
+                <span class="status-chip">Не заполнено</span>
+              </div>
+              <div class="form-grid">
+                <label class="field"><span>Жалобы</span><textarea id="dischargeComplaints" name="complaints" data-testid="discharge-complaints" placeholder="Жалобы на момент выписки" aria-label="Жалобы"></textarea></label>
+                <label class="field"><span>Объективный статус</span><textarea id="dischargeObjectiveStatus" name="objective_status" data-testid="discharge-objective-status" placeholder="Объективный статус" aria-label="Объективный статус"></textarea></label>
+                <label class="field"><span>Рекомендации</span><textarea id="dischargeRecommendations" name="recommendations" data-testid="discharge-recommendations" placeholder="Рекомендации после выписки" aria-label="Рекомендации"></textarea></label>
+              </div>
+              <button class="primary save-button" type="button" data-testid="save-discharge-summary">Сохранить эпикриз</button>
+            </section>
+
+            <section class="document-panel panel" data-document="procedure_diary" data-testid="procedure-diary-tab" hidden>
+              <div class="section-header">
+                <div>
+                  <h2>Дневник процедур</h2>
+                  <p>Фиксация выполненных услуг и результата процедуры.</p>
+                </div>
+                <span class="status-chip">Рабочий день</span>
+              </div>
+              <div class="procedure-list" data-testid="procedure-list"></div>
+              <label class="field"><span>Результат процедуры</span><textarea id="procedureResult" name="procedure_result" data-testid="procedure-result" placeholder="Результат процедуры" aria-label="Результат процедуры"></textarea></label>
+              <button class="primary save-button" type="button" data-testid="save-procedure-diary">Сохранить дневник процедуры</button>
+            </section>
+
+            <section class="document-panel panel" data-document="schedule_page" data-testid="schedule-tab" hidden>
+              <div class="section-header">
+                <div>
+                  <h2>Расписание</h2>
+                  <p>План процедур на 9 рабочих дней.</p>
+                </div>
+                <button id="confirmScheduleButton" class="primary" type="button" data-testid="confirm-schedule">Подтвердить расписание</button>
+              </div>
+              <label class="field compact"><span>Расписание</span><textarea id="schedulePlan" name="schedule" data-testid="schedule-input" placeholder="Расписание процедур" aria-label="Расписание"></textarea></label>
+              <div id="scheduleGrid" class="schedule-grid" data-testid="schedule-grid"></div>
+            </section>
+
+            <aside class="services-panel panel" data-testid="services-panel">
+              <div class="section-header">
+                <div>
+                  <h2>Услуги</h2>
+                  <p>Статусы выполнения процедур.</p>
+                </div>
+              </div>
+              <div id="servicesList" class="services-list"></div>
+              <button id="completeSelectedServiceButton" class="secondary full-width" type="button" data-testid="complete-selected-service" aria-label="Выполнено">Выполнено</button>
+            </aside>
+          </div>
+        </section>
+
+        <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
