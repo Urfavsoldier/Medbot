@@ -9,7 +9,8 @@ const LAST_COMMAND_KEY = "medbot.lastCommand";
 const STATUS = Object.freeze({
   IDLE: "Idle",
   LISTENING: "Listening",
-  PROCESSING: "Processing"
+  PROCESSING: "Processing",
+  SPEAKING: "Speaking"
 });
 
 chrome.runtime.onInstalled.addListener(() => {

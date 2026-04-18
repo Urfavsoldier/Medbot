@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
-    <main class="app-shell" id="appShell" aria-live="polite">
+    <main class="app-shell">
       <header class="topbar">
         <div class="brand-lockup">
           <div class="brand-mark" aria-hidden="true">
@@ -15,92 +15,27 @@
           </div>
           <div>
             <h1>MedBot</h1>
-            <p>Autonomous medical RPA</p>
+            <p>Voice runs in a dedicated tab</p>
           </div>
-        </div>
-        <div class="system-pill">
-          <span class="system-dot"></span>
-          <span id="statusLabel">Idle</span>
         </div>
       </header>
 
       <section class="hero-panel">
-        <div class="signal-ring" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-        <div class="hero-copy">
-          <span class="eyebrow">Voice control</span>
-          <p class="status-help" id="statusHelp">Ready to control the active medical page.</p>
+        <div>
+          <span class="eyebrow">Current status</span>
+          <p class="status-help" id="statusText">Idle</p>
         </div>
         <span class="status-dot" id="statusDot"></span>
       </section>
 
-      <section class="ai-panel">
-        <div class="panel-header">
-          <span class="eyebrow">AI status</span>
-          <span class="ai-state" id="aiState">Standby</span>
-        </div>
-        <div class="pipeline" aria-hidden="true">
-          <span id="pipelineVoice"></span>
-          <span id="pipelineAI"></span>
-          <span id="pipelineRPA"></span>
-        </div>
-        <div class="ai-grid">
-          <div>
-            <span>Intent</span>
-            <strong id="aiIntent">Waiting</strong>
-          </div>
-          <div>
-            <span>Provider</span>
-            <strong id="aiProvider">Local state</strong>
-          </div>
-        </div>
-      </section>
+      <button class="button button-primary" id="openVoiceButton" type="button">
+        <span class="button-shine"></span>
+        Open Voice Mode
+      </button>
 
-      <section class="test-ai-panel">
-        <div class="panel-header">
-          <span class="eyebrow">Test system</span>
-          <button class="mini-button" id="testAiButton" type="button">Test AI</button>
-        </div>
-        <textarea id="testAiText" rows="2" placeholder="Жалобы: головная боль. Объективно: слабость. Назначить ЛФК."></textarea>
-        <pre id="testAiResult">{}</pre>
-      </section>
-
-      <section class="command-panel">
-        <div class="panel-header">
-          <span class="eyebrow">Recognized text</span>
-          <span class="transcript-badge" id="transcriptBadge">Live</span>
-        </div>
-        <p class="live-transcript" id="liveTranscript">Waiting for speech.</p>
-        <div class="last-command-row">
-          <span>Last command</span>
-          <p id="lastCommand">No command yet.</p>
-        </div>
-      </section>
-
-      <section class="action-log-panel">
-        <div class="panel-header">
-          <span class="eyebrow">Action log</span>
-          <span class="log-count" id="logCount">0</span>
-        </div>
-        <ol class="action-log" id="actionLog">
-          <li class="empty-log">No RPA actions yet.</li>
-        </ol>
-      </section>
-
-      <section class="controls" aria-label="Voice controls">
-        <button class="button button-primary" id="startButton" type="button">
-          <span class="button-shine"></span>
-          Start Listening
-        </button>
-        <button class="button button-secondary" id="stopButton" type="button">Stop</button>
-      </section>
-
-      <p class="hint">Try: "Жалобы: головная боль. Объективно: слабость. Назначить ЛФК."</p>
+      <p class="hint">Voice recognition stays alive after this popup closes.</p>
     </main>
 
-    <script src="popup.js" type="module"></script>
+    <script src="popup.js"></script>
   </body>
 </html>

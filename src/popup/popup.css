@@ -537,6 +537,12 @@ h1 {
   animation: pulseDot 900ms ease-in-out infinite;
 }
 
+.status-dot.is-speaking {
+  background: var(--warn);
+  box-shadow: 0 0 0 5px rgba(255, 203, 119, 0.16), 0 0 18px rgba(255, 203, 119, 0.65);
+  animation: pulseDot 900ms ease-in-out infinite;
+}
+
 .app-shell.is-processing .hero-panel,
 .app-shell.is-processing .ai-panel {
   border-color: var(--border-strong);

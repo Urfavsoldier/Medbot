@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MedBot Voice Mode</title>
+    <link rel="stylesheet" href="voice.css">
+  </head>
+  <body>
+    <main class="voice-shell">
+      <header class="voice-header">
+        <div>
+          <p class="eyebrow">MedBot Voice Mode</p>
+          <h1>Clinical voice control</h1>
+        </div>
+        <div class="status-pill" id="statusPill">
+          <span class="status-dot"></span>
+          <span id="statusText">Idle</span>
+        </div>
+      </header>
+
+      <section class="voice-card">
+        <div class="orb" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+
+        <div class="controls">
+          <button id="startButton" type="button">Start Listening</button>
+          <button id="stopButton" type="button">Stop</button>
+        </div>
+      </section>
+
+      <section class="output-grid">
+        <article>
+          <div class="panel-title">Recognized speech</div>
+          <p id="recognizedText">No speech recognized yet.</p>
+        </article>
+
+        <article>
+          <div class="panel-title">AI JSON result</div>
+          <pre id="aiResult">{}</pre>
+        </article>
+      </section>
+
+      <p class="hint">Try: Жалобы: головная боль. Объективно: слабость. Назначить ЛФК.</p>
+    </main>
+
+    <script src="voice.js"></script>
+  </body>
+</html>
